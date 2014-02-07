@@ -1,4 +1,4 @@
-function WearScriptConnection(ws, group, device) {
+function WearScriptConnection(ws, group, device, onopen) {
     this.ws = ws;
     this.group = group;
     this.device = device;
@@ -6,6 +6,7 @@ function WearScriptConnection(ws, group, device) {
     this._channelsInternal = {};
     this.deviceToChannels = {};
     this._externalChannels = {};
+    this._onopen = onopen || function (event) {};
 
     this.exists = function (channel) {
 	return channel == 'subscriptions' || this._exists(channel, this._externalChannels);
@@ -17,6 +18,11 @@ function WearScriptConnection(ws, group, device) {
 
     this.channelsExternal = function() {
 	return this.deviceToChannels;
+    }
+
+    this.onopen = function (event) {
+        this.publish('subscriptions', this.groupDevice, this._keys(this._channelsInternal));
+        this._onopen(event);
     }
 
     this.receive = function (event) {
@@ -43,6 +49,7 @@ function WearScriptConnection(ws, group, device) {
 	}.bind(this));
         reader.readAsBinaryString(event.data);
     }
+    ws.onopen = this.onopen.bind(this);
     ws.onmessage = this.receive.bind(this);
 
     this._exists = function (channel, container) {
