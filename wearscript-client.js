@@ -1,15 +1,15 @@
 function WearScriptConnection(ws, group, device, onopen) {
     this.ws = ws;
-    this.group = group;
-    this.device = device;
-    this.groupDevice = group + ':' + device;
+    this.group = String(group);
+    this.device = String(device);
+    this.groupDevice = this.group + ':' + this.device;
     this._channelsInternal = {};
     this.deviceToChannels = {};
     this._externalChannels = {};
     this._onopen = onopen || function (event) {};
 
     this.exists = function (channel) {
-	return channel == 'subscriptions' || this._exists(channel, this._externalChannels);
+	return channel == 'subscriptions' || !!this._exists(channel, this._externalChannels);
     }
 
     this.channelsInternal = function() {
@@ -21,6 +21,7 @@ function WearScriptConnection(ws, group, device, onopen) {
     }
 
     this.onopen = function (event) {
+        console.log("wsclient: onopen");
         this.publish('subscriptions', this.groupDevice, this._keys(this._channelsInternal));
         this._onopen(event);
     }
@@ -33,8 +34,10 @@ function WearScriptConnection(ws, group, device, onopen) {
             var data = msgpack.unpack(reader.result);
 	    if (data[0] == 'subscriptions') {
 		this.deviceToChannels[data[1]] = data[2];
-		var externalChannels = [];
+		var externalChannels = {};
 		for (var key in this.deviceToChannels) {
+                    if (!this.deviceToChannels.hasOwnProperty(key))
+                        continue;
 		    var value = this.deviceToChannels[key];
 		    for (var i = 0; i < value.length; i++) {
 			externalChannels[value[i]] = true;
@@ -106,10 +109,11 @@ function WearScriptConnection(ws, group, device, onopen) {
     }
 
     this.publish = function () {
-	if (!this.exists(arguments[0])) {
+        console.log(arguments[0]);
+	if (!this.exists(arguments[0]) || this.ws.readyState != 1) {
 	    return this;
 	}
-	
+        console.log('Sending:' + arguments[0]);
 	this.send.apply(this, arguments);
 	return this;
     }
@@ -122,5 +126,39 @@ function WearScriptConnection(ws, group, device, onopen) {
             data_out[i] = data_enc[i];
 	}
 	this.ws.send(data_out);
+    }
+
+    this.subscribeTestHandler = function () {
+        var callback = function () {
+            var data = Array.prototype.slice.call(arguments);
+            console.log('Test callback got...')
+            console.log(data)
+            if (data[1] == 'subscribe') {
+                this.subscribe(data[2], callback);
+            } else if (data[1] == 'unsubscribe') {
+                this.unsubscribe(data[2]);
+            } else if (data[1] == 'channelsInternal') {
+                this.publish(data[2], this.channelsInternal());
+            } else if (data[1] == 'channelsExternal') {
+                this.publish(data[2], this.channelsExternal());
+            } else if (data[1] == 'group') {
+                this.publish(data[2], this.group);
+            } else if (data[1] == 'device') {
+                this.publish(data[2], this.device);
+            } else if (data[1] == 'groupDevice') {
+                this.publish(data[2], this.groupDevice);
+            } else if (data[1] == 'exists') {
+                this.publish(data[2], this.exists(data[3]));
+            } else if (data[1] == 'publish') {
+                this.publish.apply(this, data.slice(2));
+            } else if (data[1] == 'channel') {
+                this.publish(data[2], this.channel.apply(null, data.slice(3)));
+            } else if (data[1] == 'subchannel') {
+                this.publish(data[2], this.subchannel(data[3]));
+            } else if (data[1] == 'ackchannel') {
+                this.publish(data[2], this.ackchannel(data[3]));
+            }
+        }.bind(this);
+        this.subscribe('test:' + this.groupDevice, callback);
     }
 }
