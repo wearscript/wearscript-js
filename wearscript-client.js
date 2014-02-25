@@ -128,6 +128,34 @@ function WearScriptConnection(ws, group, device, onopen) {
 	this.ws.send(data_out);
     }
 
+    this.publish_retry = function (callback, retryTime, channel) {
+        var args = Array.prototype.slice.call(arguments).slice(3);
+	if (this._channelsInternal.hasOwnProperty(channel))
+            return;
+        console.log('pub_ret');
+        if (retryTime < 200)
+            retryTime = 200;
+        var inner = function () {
+            console.log('pub_ret0a');
+	    if (!this._channelsInternal.hasOwnProperty(channel))
+                return;
+            console.log('pub_ret0b');
+	    this.publish.apply(this, args);
+            retryTime *= 2;
+            if (retryTime > 30000)
+                retryTime = 30000;
+            window.setTimeout(inner, retryTime);
+        }.bind(this);
+        var listener = function () {
+            console.log('pub_ret1');
+            console.log('listener: result');
+            this.unsubscribe(channel);
+            callback.apply(null, Array.prototype.slice.call(arguments));
+        }.bind(this);
+        this.subscribe(channel, listener);
+        inner();
+    }
+
     this.subscribeTestHandler = function () {
         var callback = function () {
             var data = Array.prototype.slice.call(arguments);
