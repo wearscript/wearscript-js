@@ -189,4 +189,8 @@ function WearScriptConnection(ws, group, device, onopen) {
         }.bind(this);
         this.subscribe('test:' + this.groupDevice, callback);
     }
+    // NOTE(brandyn): Loop and republish subscriptions to keep connection alive
+    setInterval(function () {
+	this.publish('subscriptions', this.groupDevice, this._keys(this._channelsInternal));
+    }.bind(this), 60000);
 }
